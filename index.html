@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="th" data-accent="blue" data-mode="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>สต๊อกรถมอภาค</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-left">
+    <h1 class="brand">สต๊อกรถมอภาค</h1>
+    <nav class="tabs" id="tabs">
+      <button class="tab-btn active" data-page="stock">สต๊อกรถ</button>
+      <button class="tab-btn" data-page="queue">คิวถ่ายคลิป</button>
+      <button class="tab-btn" data-page="history">ประวัติการถ่าย</button>
+    </nav>
+  </div>
+  <div class="topbar-right">
+    <div class="theme-swatches" id="themeSwatches" title="เลือกโทนสี">
+      <button class="swatch swatch-white" data-accent="white" aria-label="สีขาว"></button>
+      <button class="swatch swatch-black" data-accent="black" aria-label="สีดำ"></button>
+      <button class="swatch swatch-blue active" data-accent="blue" aria-label="สีฟ้า"></button>
+    </div>
+    <button id="modeToggle" class="icon-btn" title="สลับโหมดมืด/สว่าง">🌙</button>
+    <button id="adminToggle" class="icon-btn lock-btn" title="โหมดแก้ไข (ผู้ดูแล)">🔒</button>
+  </div>
+</header>
+
+<main>
+
+<!-- ==================== STOCK PAGE ==================== -->
+<section class="page active" id="page-stock">
+
+  <div class="toolbar">
+    <input type="search" id="searchInput" class="search-input" placeholder="ค้นหา... (ทะเบียน, ยี่ห้อ, รุ่น, สี ฯลฯ)">
+
+    <div class="view-toggle">
+      <button class="view-btn active" data-view="table" title="มุมมองตาราง">☰ ตาราง</button>
+      <button class="view-btn" data-view="grid" title="มุมมองการ์ด">▦ การ์ด</button>
+    </div>
+
+    <select id="sortSelect" class="sort-select">
+      <option value="">เรียงลำดับ...</option>
+      <option value="price-asc">ราคาต่ำ-สูง</option>
+      <option value="price-desc">ราคาสูง-ต่ำ</option>
+      <option value="year-desc">ปีใหม่-เก่า</option>
+      <option value="year-asc">ปีเก่า-ใหม่</option>
+    </select>
+  </div>
+
+  <div class="toolbar toolbar-secondary">
+    <div class="brand-filters" id="brandFilters"></div>
+    <div class="price-filter">
+      <label>ราคา</label>
+      <input type="number" id="priceMin" placeholder="0" min="0" step="1000">
+      <span>-</span>
+      <input type="number" id="priceMax" placeholder="300,000" min="0" step="1000">
+      <button id="priceClear" class="btn-ghost-sm">ล้าง</button>
+    </div>
+    <div class="result-count" id="resultCount"></div>
+  </div>
+
+  <!-- Table view -->
+  <div class="table-wrap" id="tableView">
+    <table class="stock-table" id="stockTable">
+      <thead>
+        <tr>
+          <th class="sticky-col sticky-col-1">ทะเบียนเดิม</th>
+          <th class="sticky-col sticky-col-2">ยี่ห้อ</th>
+          <th class="sticky-col sticky-col-3">ชนิดรถ</th>
+          <th>ทะเบียนใหม่</th>
+          <th>วันที่ซื้อ</th>
+          <th>สี</th>
+          <th>ราคากลาง TTB</th>
+          <th>ราคาขาย</th>
+          <th>ปรับราคา</th>
+          <th class="col-action">จัดการ</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+
+  <!-- Grid view -->
+  <div class="grid-view" id="gridView" hidden></div>
+
+</section>
+
+<!-- ==================== QUEUE PAGE ==================== -->
+<section class="page" id="page-queue">
+  <div class="queue-header">
+    <h2>คิวถ่ายคลิป</h2>
+    <p class="queue-sub">ระบบจะไล่ถ่ายทีละคันจนครบทุกคันก่อน แล้วค่อยวนกลับมารอบใหม่ เพื่อไม่ให้ถ่ายซ้ำคันเดิม</p>
+    <div class="queue-progress">
+      <div class="queue-progress-bar"><div class="queue-progress-fill" id="queueProgressFill"></div></div>
+      <span id="queueProgressText">0 / 0 คัน (รอบที่ 1)</span>
+    </div>
+    <div class="queue-actions">
+      <button id="saveBtn" class="btn-primary">💾 บันทึก</button>
+      <button id="exportBtn" class="btn-ghost">⬇️ ส่งออกข้อมูล (overrides.json)</button>
+      <span id="saveStatus" class="save-status"></span>
+    </div>
+  </div>
+  <div class="queue-list" id="queueList"></div>
+</section>
+
+<!-- ==================== HISTORY PAGE ==================== -->
+<section class="page" id="page-history">
+  <div class="queue-header">
+    <h2>ประวัติการถ่ายล่าสุด</h2>
+    <p class="queue-sub">รายการรถที่ถ่ายคลิปไปแล้ว เรียงจากล่าสุดไปเก่าสุด</p>
+  </div>
+  <div class="history-list" id="historyList"></div>
+</section>
+
+</main>
+
+<!-- ==================== DETAIL MODAL ==================== -->
+<div class="modal-overlay" id="detailModal" hidden>
+  <div class="modal detail-modal">
+    <button class="modal-close" id="detailModalClose">✕</button>
+    <div class="detail-body" id="detailBody"></div>
+  </div>
+</div>
+
+<!-- ==================== IMAGE PICKER MODAL ==================== -->
+<div class="modal-overlay" id="imagePickerModal" hidden>
+  <div class="modal image-picker-modal">
+    <button class="modal-close" id="imagePickerClose">✕</button>
+    <h3>เลือกรูปภาพสำหรับรถคันนี้</h3>
+    <p class="modal-hint">คลิกรูปเพื่อเพิ่ม/เอาออกจากรถคันนี้</p>
+    <div class="image-picker-grid" id="imagePickerGrid"></div>
+  </div>
+</div>
+
+<!-- ==================== CONFIRM MODAL (generic) ==================== -->
+<div class="modal-overlay" id="confirmModal" hidden>
+  <div class="modal confirm-modal">
+    <p id="confirmText">ต้องการที่จะยกเลิกรายการล่าสุด?</p>
+    <div class="confirm-actions">
+      <button id="confirmCancelBtn" class="btn-ghost">ยกเลิก</button>
+      <button id="confirmOkBtn" class="btn-danger">ตกลง</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== PIN MODAL ==================== -->
+<div class="modal-overlay" id="pinModal" hidden>
+  <div class="modal pin-modal">
+    <button class="modal-close" id="pinModalClose">✕</button>
+    <h3>ปลดล็อกโหมดแก้ไข</h3>
+    <p class="modal-hint">กรอกรหัสผ่านสำหรับผู้ดูแลระบบ</p>
+    <input type="password" id="pinInput" class="pin-input" placeholder="รหัสผ่าน" inputmode="numeric">
+    <div class="confirm-actions">
+      <button id="pinCancelBtn" class="btn-ghost">ยกเลิก</button>
+      <button id="pinOkBtn" class="btn-primary">ปลดล็อก</button>
+    </div>
+    <p class="pin-error" id="pinError" hidden>รหัสผ่านไม่ถูกต้อง</p>
+  </div>
+</div>
+
+<!-- ==================== TOAST ==================== -->
+<div class="toast" id="toast" hidden></div>
+
+<script src="script.js"></script>
+</body>
+</html>
