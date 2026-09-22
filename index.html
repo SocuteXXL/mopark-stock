@@ -14,7 +14,6 @@
     <nav class="tabs" id="tabs">
       <button class="tab-btn active" data-page="stock">สต๊อกรถ</button>
       <button class="tab-btn" data-page="queue">คิวถ่ายคลิป</button>
-      <button class="tab-btn" data-page="history">ประวัติการถ่าย</button>
     </nav>
   </div>
   <div class="topbar-right">
@@ -37,8 +36,8 @@
     <input type="search" id="searchInput" class="search-input" placeholder="ค้นหา... (ทะเบียน, ยี่ห้อ, รุ่น, สี ฯลฯ)">
 
     <div class="view-toggle">
-      <button class="view-btn active" data-view="table" title="มุมมองตาราง">☰ ตาราง</button>
-      <button class="view-btn" data-view="grid" title="มุมมองการ์ด">▦ การ์ด</button>
+      <button class="view-btn" data-view="table" title="มุมมองตาราง">☰ ตาราง</button>
+      <button class="view-btn active" data-view="grid" title="มุมมองการ์ด">▦ การ์ด</button>
     </div>
 
     <select id="sortSelect" class="sort-select">
@@ -63,7 +62,7 @@
   </div>
 
   <!-- Table view -->
-  <div class="table-wrap" id="tableView">
+  <div class="table-wrap" id="tableView" hidden>
     <table class="stock-table" id="stockTable">
       <thead>
         <tr>
@@ -84,35 +83,40 @@
   </div>
 
   <!-- Grid view -->
-  <div class="grid-view" id="gridView" hidden></div>
+  <div class="grid-view" id="gridView"></div>
 
 </section>
 
 <!-- ==================== QUEUE PAGE ==================== -->
 <section class="page" id="page-queue">
   <div class="queue-header">
-    <h2>คิวถ่ายคลิป</h2>
-    <p class="queue-sub">ระบบจะไล่ถ่ายทีละคันจนครบทุกคันก่อน แล้วค่อยวนกลับมารอบใหม่ เพื่อไม่ให้ถ่ายซ้ำคันเดิม</p>
+    <div class="queue-header-top">
+      <div>
+        <h2>คิวถ่ายคลิป</h2>
+        <p class="queue-sub">ระบบจะไล่ถ่ายทีละคันจนครบทุกคันก่อน แล้วค่อยวนกลับมารอบใหม่ เพื่อไม่ให้ถ่ายซ้ำคันเดิม</p>
+      </div>
+      <button id="saveBtn" class="btn-primary">บันทึก</button>
+    </div>
     <div class="queue-progress">
       <div class="queue-progress-bar"><div class="queue-progress-fill" id="queueProgressFill"></div></div>
       <span id="queueProgressText">0 / 0 คัน (รอบที่ 1)</span>
     </div>
-    <div class="queue-actions">
-      <button id="saveBtn" class="btn-primary">💾 บันทึก</button>
-      <button id="exportBtn" class="btn-ghost">⬇️ ส่งออกข้อมูล (overrides.json)</button>
-      <span id="saveStatus" class="save-status"></span>
-    </div>
+    <span id="saveStatus" class="save-status"></span>
   </div>
-  <div class="queue-list" id="queueList"></div>
-</section>
 
-<!-- ==================== HISTORY PAGE ==================== -->
-<section class="page" id="page-history">
-  <div class="queue-header">
-    <h2>ประวัติการถ่ายล่าสุด</h2>
-    <p class="queue-sub">รายการรถที่ถ่ายคลิปไปแล้ว เรียงจากล่าสุดไปเก่าสุด</p>
+  <div class="history-section">
+    <h3>ประวัติการถ่ายล่าสุด</h3>
+    <div class="history-list" id="historyList"></div>
   </div>
-  <div class="history-list" id="historyList"></div>
+
+  <div class="toolbar">
+    <input type="search" id="queueSearchInput" class="search-input" placeholder="ค้นหา... (ทะเบียน, ยี่ห้อ, รุ่น, สี ฯลฯ)">
+  </div>
+  <div class="toolbar toolbar-secondary">
+    <div class="brand-filters" id="queueBrandFilters"></div>
+  </div>
+
+  <div class="queue-list" id="queueList"></div>
 </section>
 
 </main>
@@ -142,6 +146,22 @@
     <div class="confirm-actions">
       <button id="confirmCancelBtn" class="btn-ghost">ยกเลิก</button>
       <button id="confirmOkBtn" class="btn-danger">ตกลง</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SHOOT (mark shot) MODAL ==================== -->
+<div class="modal-overlay" id="shootModal" hidden>
+  <div class="modal shoot-modal">
+    <button class="modal-close" id="shootModalClose">✕</button>
+    <h3 id="shootModalTitle">บันทึกว่าถ่ายคันนี้แล้ว</h3>
+    <div class="shoot-options">
+      <button id="shootNowBtn" class="btn-primary">ถ่ายแล้ววันนี้</button>
+      <button id="shootPickTimeBtn" class="btn-ghost">เลือกวันที่-เวลา</button>
+    </div>
+    <div class="shoot-time-picker" id="shootTimePicker" hidden>
+      <input type="datetime-local" id="shootTimeInput" class="pin-input">
+      <button id="shootTimeConfirmBtn" class="btn-primary">ยืนยัน</button>
     </div>
   </div>
 </div>

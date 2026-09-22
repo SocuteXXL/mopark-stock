@@ -35,7 +35,7 @@ let HISTORY = [];     // [{ id, ts, brand, model, plate }]
 
 let state = {
   page: "stock",
-  view: "table",
+  view: "grid",
   search: "",
   brands: new Set(),
   priceMin: null,
@@ -44,7 +44,10 @@ let state = {
   detailCarId: null,
   detailImgIndex: 0,
   pickerCarId: null,
-  confirmCb: null
+  confirmCb: null,
+  queueSearch: "",
+  queueBrands: new Set(),
+  shootTargetId: null
 };
 
 // ============================================================
@@ -76,6 +79,17 @@ function saveHistory() { localStorage.setItem(LS.history, JSON.stringify(HISTORY
 function getOverride(id) {
   if (!OVERRIDES[id]) OVERRIDES[id] = { images: [], priceAdjust: "" };
   return OVERRIDES[id];
+}
+
+// A car only counts as "ready" (shown in stock + shoot queue) once it has
+// at least one photo assigned. Cars without a photo stay in data.json /
+// OVERRIDES untouched — this is a display filter, not a delete.
+function hasPhoto(car) {
+  const ov = OVERRIDES[car.id];
+  return !!(ov && ov.images && ov.images.length > 0);
+}
+function getPhotoCars() {
+  return CARS.filter(hasPhoto);
 }
 
 // ============================================================
@@ -148,14 +162,15 @@ function getTheme() {
 }
 
 // ============================================================
-// Brand filter chips
+// Brand filter chips (shared builder for the stock page and the
+// queue page, each with its own selector element and Set of state)
 // ============================================================
-function buildBrandFilters() {
+function buildBrandFiltersInto(wrapId, brandSet, onChange) {
   const found = new Set(CARS.map(c => c["ยี่ห้อ"]).filter(Boolean));
   const ordered = DEFAULT_BRANDS.filter(b => found.has(b));
   found.forEach(b => { if (!ordered.includes(b)) ordered.push(b); });
 
-  const wrap = $("#brandFilters");
+  const wrap = $(wrapId);
   wrap.innerHTML = ordered.map(b =>
     `<button type="button" class="brand-chip" data-brand="${esc(b)}">${esc(b)}</button>`
   ).join("");
@@ -163,18 +178,22 @@ function buildBrandFilters() {
   wrap.querySelectorAll(".brand-chip").forEach(btn => {
     btn.addEventListener("click", () => {
       const b = btn.dataset.brand;
-      if (state.brands.has(b)) state.brands.delete(b); else state.brands.add(b);
+      if (brandSet.has(b)) brandSet.delete(b); else brandSet.add(b);
       btn.classList.toggle("active");
-      renderStock();
+      onChange();
     });
   });
+}
+function buildBrandFilters() {
+  buildBrandFiltersInto("#brandFilters", state.brands, renderStock);
+  buildBrandFiltersInto("#queueBrandFilters", state.queueBrands, renderQueue);
 }
 
 // ============================================================
 // Filtering / sorting
 // ============================================================
 function getFilteredCars() {
-  let list = CARS.slice();
+  let list = getPhotoCars();
 
   if (state.search.trim()) {
     const q = state.search.trim().toLowerCase();
@@ -219,7 +238,8 @@ function getFilteredCars() {
 // ============================================================
 function renderStock() {
   const list = getFilteredCars();
-  $("#resultCount").textContent = `พบ ${list.length} คัน จากทั้งหมด ${CARS.length} คัน`;
+  const photoTotal = getPhotoCars().length;
+  $("#resultCount").textContent = `พบ ${list.length} คัน จากทั้งหมด ${photoTotal} คัน (แสดงเฉพาะคันที่มีรูปภาพ)`;
 
   if (state.view === "table") renderTable(list);
   else renderGrid(list);
@@ -405,51 +425,87 @@ function openImagePicker(carId) {
 function closeImagePicker() { $("#imagePickerModal").hidden = true; }
 
 // ============================================================
-// Queue (round-robin, derived from HISTORY length — no separate
-// mutable cycle/shot-set state, so cancel-last can never desync)
+// Queue: round-robin CYCLES (shoot every car once before any car
+// repeats), but free choice of WHICH car to shoot next within a
+// cycle. Only cars with a photo are ever in the queue.
+//
+// Still fully derived from HISTORY, not a separately-tracked set:
+// the last (HISTORY.length % n) entries ARE this cycle's shots, in
+// whatever order the admin picked them. That's what keeps
+// cancel-last a plain HISTORY.pop() with nothing else to desync.
 // ============================================================
 function getQueueInfo() {
-  const n = CARS.length;
+  const queueCars = getPhotoCars();
+  const n = queueCars.length;
   const total = HISTORY.length;
   const pos = n > 0 ? total % n : 0;
   const cycle = n > 0 ? Math.floor(total / n) + 1 : 1;
-  return { n, total, pos, cycle };
+  const shotThisCycle = new Set(HISTORY.slice(total - pos).map(h => h.id));
+  return { queueCars, n, total, pos, cycle, shotThisCycle };
+}
+
+// Search/brand filters on the queue page only narrow which cards are
+// VISIBLE — they never change queueCars/n itself, so the round-robin
+// cycle math above always reflects every photographed car regardless
+// of what the admin is currently searching for.
+function getFilteredQueueCars(queueCars) {
+  let list = queueCars;
+  if (state.queueSearch.trim()) {
+    const q = state.queueSearch.trim().toLowerCase();
+    list = list.filter(c => {
+      const hay = [
+        c["ทะเบียนเดิม"], c["ทะเบียนใหม่"], c["ยี่ห้อ"], c["ชนิดรถ"], c["สี"]
+      ].filter(Boolean).join(" ").toLowerCase();
+      return hay.includes(q);
+    });
+  }
+  if (state.queueBrands.size > 0) {
+    list = list.filter(c => state.queueBrands.has(c["ยี่ห้อ"]));
+  }
+  return list;
 }
 
 function renderQueue() {
-  const { n, pos, cycle } = getQueueInfo();
+  const { queueCars, n, pos, cycle, shotThisCycle } = getQueueInfo();
   const admin = isAdmin();
 
   $("#queueProgressText").textContent = `${pos} / ${n} คัน (รอบที่ ${cycle})`;
   $("#queueProgressFill").style.width = n > 0 ? `${(pos / n) * 100}%` : "0%";
 
+  renderHistory();
+
   if (n === 0) {
-    $("#queueList").innerHTML = `<div class="empty-state">ยังไม่มีข้อมูลรถในสต๊อก</div>`;
+    $("#queueList").innerHTML = `<div class="empty-state">ยังไม่มีรถที่มีรูปภาพในคิวถ่ายคลิป (เพิ่มรูปให้รถในสต๊อกก่อน)</div>`;
     return;
   }
 
-  $("#queueList").innerHTML = CARS.map((c, i) => {
+  const displayCars = getFilteredQueueCars(queueCars);
+  if (displayCars.length === 0) {
+    $("#queueList").innerHTML = `<div class="empty-state">ไม่พบรถที่ตรงกับเงื่อนไข</div>`;
+    return;
+  }
+
+  $("#queueList").innerHTML = displayCars.map(c => {
     const ov = getOverride(c.id);
     const img = ov.images && ov.images[0];
-    const thumb = img ? `<img class="queue-item-thumb" src="images/${esc(img)}" alt="">`
+    const thumb = img ? `<img class="queue-item-thumb" src="images/${esc(img)}" alt="" data-view-detail="${esc(c.id)}">`
                        : `<div class="queue-item-thumb car-card-thumb placeholder" style="width:48px;height:48px;"></div>`;
-    let badge, actionHtml;
-    if (i < pos) {
-      badge = `<span class="queue-badge">ถ่ายแล้ว (รอบนี้)</span>`;
+    const isShot = shotThisCycle.has(c.id);
+    const badge = isShot
+      ? `<span class="queue-badge">ถ่ายแล้ว (รอบนี้)</span>`
+      : `<span class="queue-badge">รอถ่าย</span>`;
+    let actionHtml;
+    if (isShot) {
       actionHtml = "";
-    } else if (i === pos) {
-      badge = `<span class="queue-badge">คิวถัดไป</span>`;
-      actionHtml = admin
-        ? `<button class="btn-shot" data-shot="${esc(c.id)}">🎬 ถ่ายแล้ววันนี้</button>`
-        : `<span class="locked-hint">🔒 ล็อกอยู่</span>`;
+    } else if (admin) {
+      actionHtml = `<button class="btn-shot" data-shot="${esc(c.id)}">ถ่ายแล้ววันนี้</button>`;
     } else {
-      badge = `<span class="queue-badge">รอคิว</span>`;
-      actionHtml = "";
+      actionHtml = `<span class="locked-hint">ล็อกอยู่</span>`;
     }
     return `
-    <div class="queue-item ${i < pos ? "shot" : ""}">
+    <div class="queue-item ${isShot ? "shot" : ""}">
       ${thumb}
-      <div class="queue-item-info">
+      <div class="queue-item-info" data-view-detail="${esc(c.id)}">
         <div class="name">${esc(c["ยี่ห้อ"]) || "-"} ${esc(c["ชนิดรถ"]) || ""}</div>
         <div class="sub">${esc(c["ทะเบียนใหม่"]) || esc(c["ทะเบียนเดิม"]) || "-"}</div>
       </div>
@@ -459,30 +515,50 @@ function renderQueue() {
   }).join("");
 
   $all("[data-shot]").forEach(btn => {
-    btn.addEventListener("click", () => markShot(btn.dataset.shot));
+    btn.addEventListener("click", () => openShootModal(btn.dataset.shot));
+  });
+  $all("[data-view-detail]").forEach(el => {
+    el.addEventListener("click", () => openDetail(el.dataset.viewDetail));
   });
 }
 
-function markShot(id) {
-  const { pos } = getQueueInfo();
-  const expected = CARS[pos] && CARS[pos].id;
-  if (id !== expected) { renderQueue(); return; } // stale click guard
-  const c = CARS.find(x => x.id === id);
+function markShot(id, customTs) {
+  const { shotThisCycle } = getQueueInfo();
+  const c = getPhotoCars().find(x => x.id === id);
+  if (!c || shotThisCycle.has(id)) { renderQueue(); return; } // stale click guard (already shot this cycle, or no longer has a photo)
   HISTORY.push({
     id: c.id,
-    ts: Date.now(),
+    ts: customTs || Date.now(),
     brand: c["ยี่ห้อ"] || "",
     model: c["ชนิดรถ"] || "",
     plate: c["ทะเบียนใหม่"] || c["ทะเบียนเดิม"] || ""
   });
   saveHistory();
   const after = getQueueInfo();
-  toast(`บันทึกแล้ว: ถ่าย ${c["ยี่ห้อ"] || ""} ${c["ชนิดรถ"] || ""} วันนี้`);
+  toast(`บันทึกแล้ว: ถ่าย ${c["ยี่ห้อ"] || ""} ${c["ชนิดรถ"] || ""}`);
   if (after.pos === 0 && after.cycle > 1) {
     setTimeout(() => toast(`ครบรอบแล้ว! เริ่มรอบที่ ${after.cycle}`), 2300);
   }
   renderQueue();
-  renderHistory();
+}
+
+// ============================================================
+// Shoot modal: choose "shot today" (now) or pick a custom date/time
+// ============================================================
+function openShootModal(id) {
+  const c = getPhotoCars().find(x => x.id === id);
+  if (!c) { renderQueue(); return; }
+  state.shootTargetId = id;
+  $("#shootModalTitle").textContent = `บันทึกว่าถ่าย ${c["ยี่ห้อ"] || ""} ${c["ชนิดรถ"] || ""} แล้ว`;
+  $("#shootTimePicker").hidden = true;
+  const now = new Date();
+  const pad = n => String(n).padStart(2, "0");
+  $("#shootTimeInput").value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  $("#shootModal").hidden = false;
+}
+function closeShootModal() {
+  $("#shootModal").hidden = true;
+  state.shootTargetId = null;
 }
 
 // ============================================================
@@ -499,7 +575,7 @@ function renderHistory() {
   $("#historyList").innerHTML = reversed.map((h, i) => {
     const ov = getOverride(h.id);
     const img = ov.images && ov.images[0];
-    const thumb = img ? `<img class="history-item-thumb" src="images/${esc(img)}" alt="">`
+    const thumb = img ? `<img class="history-item-thumb" src="images/${esc(img)}" alt="" data-view-detail="${esc(h.id)}">`
                        : `<div class="history-item-thumb car-card-thumb placeholder" style="width:48px;height:48px;"></div>`;
     const dt = new Date(h.ts);
     const dtStr = dt.toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
@@ -515,13 +591,16 @@ function renderHistory() {
     </div>`;
   }).join("");
 
+  $all("#historyList [data-view-detail]").forEach(el => {
+    el.addEventListener("click", () => openDetail(el.dataset.viewDetail));
+  });
+
   const cancelBtn = $("#cancelLatestBtn");
   if (cancelBtn) {
     cancelBtn.addEventListener("click", () => {
       showConfirm("ต้องการที่จะยกเลิกรายการถ่ายล่าสุดใช่หรือไม่?", () => {
         HISTORY.pop();
         saveHistory();
-        renderHistory();
         renderQueue();
         toast("ยกเลิกรายการล่าสุดแล้ว");
       });
@@ -585,25 +664,6 @@ function manualSave() {
   toast("บันทึกข้อมูลเรียบร้อยแล้ว");
 }
 
-// Downloads the admin's current overrides + shoot history as overrides.json.
-// Replace the overrides.json file next to index.html with this download and
-// republish the site so every viewer sees the same images/prices/history
-// (their own browser's localStorage always wins on future visits, so this
-// only seeds *new* visitors — it will not overwrite someone's own progress).
-function exportOverrides() {
-  const payload = { overrides: OVERRIDES, history: HISTORY, exportedAt: new Date().toISOString() };
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "overrides.json";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-  toast("ดาวน์โหลด overrides.json แล้ว");
-}
-
 // ============================================================
 // Page switching
 // ============================================================
@@ -617,7 +677,6 @@ function switchPage(page) {
 function renderAll() {
   if (state.page === "stock") renderStock();
   else if (state.page === "queue") renderQueue();
-  else if (state.page === "history") renderHistory();
 }
 
 // ============================================================
@@ -685,7 +744,25 @@ function bindGlobalEvents() {
   });
 
   $("#saveBtn").addEventListener("click", manualSave);
-  $("#exportBtn").addEventListener("click", exportOverrides);
+
+  $("#queueSearchInput").addEventListener("input", e => { state.queueSearch = e.target.value; renderQueue(); });
+
+  $("#shootModalClose").addEventListener("click", closeShootModal);
+  $("#shootModal").addEventListener("click", e => { if (e.target.id === "shootModal") closeShootModal(); });
+  $("#shootNowBtn").addEventListener("click", () => {
+    const id = state.shootTargetId;
+    closeShootModal();
+    if (id) markShot(id);
+  });
+  $("#shootPickTimeBtn").addEventListener("click", () => { $("#shootTimePicker").hidden = false; });
+  $("#shootTimeConfirmBtn").addEventListener("click", () => {
+    const id = state.shootTargetId;
+    const val = $("#shootTimeInput").value;
+    if (!id || !val) return;
+    const ts = new Date(val).getTime();
+    closeShootModal();
+    markShot(id, ts);
+  });
 }
 
 document.addEventListener("DOMContentLoaded", init);

@@ -186,7 +186,7 @@ thead .sticky-col { z-index: 4; }
   position: relative;
 }
 .car-card-thumb {
-  width: 100%; aspect-ratio: 4/3; object-fit: cover; background: var(--bg);
+  width: 100%; aspect-ratio: 4/3; object-fit: contain; background: var(--bg);
   display: block;
 }
 .car-card-thumb.placeholder {
@@ -204,13 +204,21 @@ thead .sticky-col { z-index: 4; }
 
 /* ===================== QUEUE / HISTORY ===================== */
 .queue-header { margin-bottom: 16px; }
+.queue-header-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .queue-sub { color: var(--text-muted); font-size: 0.88rem; margin: 4px 0 12px; }
-.queue-progress { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.queue-progress { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
 .queue-progress-bar { flex: 1; height: 10px; border-radius: 999px; background: var(--border); overflow: hidden; }
 .queue-progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.3s; }
 #queueProgressText { font-size: 0.85rem; color: var(--text-muted); white-space: nowrap; }
-.queue-actions { display: flex; align-items: center; gap: 10px; }
 .save-status { font-size: 0.85rem; color: var(--text-muted); }
+
+.history-section {
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px 16px; margin-bottom: 18px;
+}
+.history-section h3 { margin: 0 0 10px; font-size: 1rem; }
+.history-section .history-list { max-height: 260px; overflow-y: auto; }
+.history-section .empty-state { padding: 14px; }
 
 .queue-list, .history-list { display: flex; flex-direction: column; gap: 8px; }
 .queue-item, .history-item {
@@ -220,8 +228,9 @@ thead .sticky-col { z-index: 4; }
 .queue-item.shot { opacity: 0.55; }
 .queue-item-thumb, .history-item-thumb {
   width: 48px; height: 48px; border-radius: 8px; object-fit: cover; background: var(--bg); flex-shrink: 0;
+  cursor: pointer;
 }
-.queue-item-info, .history-item-info { flex: 1; min-width: 0; }
+.queue-item-info, .history-item-info { flex: 1; min-width: 0; cursor: pointer; }
 .queue-item-info .name, .history-item-info .name { font-weight: 600; }
 .queue-item-info .sub, .history-item-info .sub { font-size: 0.8rem; color: var(--text-muted); }
 .queue-badge {
@@ -262,8 +271,8 @@ thead .sticky-col { z-index: 4; }
 
 /* Detail modal */
 .detail-gallery-main {
-  width: 100%; aspect-ratio: 16/10; object-fit: cover; border-radius: 10px; background: var(--bg);
-  margin-bottom: 10px;
+  display: block; max-width: 100%; max-height: 65vh; width: auto; height: auto;
+  object-fit: contain; margin: 0 auto 10px; border-radius: 10px; background: var(--bg);
 }
 .detail-gallery-thumbs { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 16px; }
 .detail-gallery-thumbs img {
@@ -319,6 +328,12 @@ thead .sticky-col { z-index: 4; }
   letter-spacing: 4px;
 }
 .pin-error { color: #d63333; font-size: 0.85rem; }
+
+/* Shoot (mark shot) modal */
+.shoot-modal { max-width: 380px; text-align: center; }
+.shoot-options { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.shoot-time-picker { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+.shoot-time-picker .pin-input { letter-spacing: normal; font-size: 1rem; }
 
 /* Toast */
 .toast {
