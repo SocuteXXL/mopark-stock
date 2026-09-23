@@ -65,6 +65,20 @@ function fmtMoney(n) {
 }
 function isAdmin() { return sessionStorage.getItem(SS_ADMIN) === "1"; }
 
+// Mileage isn't its own column in the source sheet — it's embedded as
+// free text inside "ราคากลาง TTB" (e.g. "เลขไมล์ 154,444 KM TTB..."),
+// with the odd typo "เลขไม" (missing ล์) here and there. Pull the
+// number right after that label so sort-by-mileage has something to
+// compare; cars with no parseable mileage sort to the end either way.
+function getMileage(car) {
+  const s = car["ราคากลาง TTB"];
+  if (!s) return null;
+  const m = s.match(/เลขไม(?:ล์)?\s*([\d,]+)/);
+  if (!m) return null;
+  const n = parseInt(m[1].replace(/,/g, ""), 10);
+  return isNaN(n) ? null : n;
+}
+
 function toast(msg, ms = 2200) {
   const t = $("#toast");
   t.textContent = msg;
@@ -228,6 +242,10 @@ function getFilteredCars() {
     list.sort((a, b) => (b["ปีรถ_num"] ?? -Infinity) - (a["ปีรถ_num"] ?? -Infinity));
   } else if (state.sort === "year-asc") {
     list.sort((a, b) => (a["ปีรถ_num"] ?? Infinity) - (b["ปีรถ_num"] ?? Infinity));
+  } else if (state.sort === "mileage-asc") {
+    list.sort((a, b) => (getMileage(a) ?? Infinity) - (getMileage(b) ?? Infinity));
+  } else if (state.sort === "mileage-desc") {
+    list.sort((a, b) => (getMileage(b) ?? -Infinity) - (getMileage(a) ?? -Infinity));
   }
 
   return list;
