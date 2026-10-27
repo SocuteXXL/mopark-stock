@@ -5,19 +5,20 @@
 const ADMIN_PIN = "2569"; // change this to whatever PIN you want the admin to use
 
 const IMAGE_FILES = [
-  "IMG_0263.JPG","IMG_0264.JPG","IMG_0265.JPG","IMG_0266.JPG","IMG_0267.JPG",
-  "IMG_0268.JPG","IMG_0269.JPG","IMG_0270.JPG","IMG_0271.JPG","IMG_0272.JPG",
-  "IMG_0273.JPG","IMG_0274.JPG","IMG_0275.JPG","IMG_0276.JPG","IMG_0279.JPG",
-  "IMG_0280.JPG","IMG_0281.JPG","IMG_0282.JPG","IMG_0283.JPG","IMG_0284.JPG",
-  "IMG_0285.JPG","IMG_0286.JPG","IMG_0287.JPG","IMG_0288.JPG","IMG_0289.JPG",
-  "IMG_0290.JPG","IMG_0291.JPG","IMG_0292.JPG","IMG_0293.JPG","IMG_0294.JPG",
-  "IMG_0295.JPG","IMG_0296.JPG","IMG_0297.JPG","IMG_0298.JPG","IMG_0299.JPG",
-  "IMG_0300.JPG","IMG_0301.JPG","IMG_0302.JPG","IMG_0303.JPG","IMG_0304.JPG",
-  "IMG_0305.JPG","IMG_0306.JPG","IMG_0307.JPG","IMG_0308.JPG","IMG_0309.JPG",
-  "IMG_0310.JPG","IMG_0311.JPG","IMG_0312.JPG","IMG_0313.JPG","IMG_0314.JPG",
-  "IMG_0315.JPG","IMG_0316.JPG","IMG_0317.JPG","IMG_0318.JPG","IMG_0319.JPG",
-  "IMG_0320.JPG","IMG_0321.JPG","IMG_0322.JPG","IMG_0323.JPG","IMG_0324.JPG",
-  "IMG_0325.JPG","IMG_0326.JPG","IMG_0327.JPG","IMG_0328.JPG"
+  "IMG_0272.JPG","IMG_0293.JPG","IMG_0307.JPG","IMG_0309.JPG","IMG_0326.JPG",
+  "IMG_2488.JPG","IMG_2489.JPG","IMG_2490.JPG","IMG_2491.JPG","IMG_2492.JPG",
+  "IMG_2493.JPG","IMG_2494.JPG","IMG_2495.JPG","IMG_2496.JPG","IMG_2497.JPG",
+  "IMG_2498.JPG","IMG_2499.JPG","IMG_2500.JPG","IMG_2501.JPG","IMG_2502.JPG",
+  "IMG_2503.JPG","IMG_2504.JPG","IMG_2505.JPG","IMG_2506.JPG","IMG_2507.JPG",
+  "IMG_2508.JPG","IMG_2509.JPG","IMG_2510.JPG","IMG_2511.JPG","IMG_2512.JPG",
+  "IMG_2513.JPG","IMG_2514.JPG","IMG_2515.JPG","IMG_2516.JPG","IMG_2517.JPG",
+  "IMG_2518.JPG","IMG_2519.JPG","IMG_2520.JPG","IMG_2521.JPG","IMG_2522.JPG",
+  "IMG_2523.JPG","IMG_2524.JPG","IMG_2525.JPG","IMG_2526.JPG","IMG_2527.JPG",
+  "IMG_2528.JPG","IMG_2529.JPG","IMG_2530.JPG","IMG_2531.JPG","IMG_2532.JPG",
+  "IMG_2533.JPG","IMG_2534.JPG","IMG_2535.JPG","IMG_2536.JPG","IMG_2537.JPG",
+  "IMG_2538.JPG","IMG_2539.JPG","IMG_2540.JPG","IMG_2541.JPG","IMG_2542.JPG",
+  "IMG_2543.JPG","IMG_2544.JPG","IMG_2545.JPG","IMG_2546.JPG","IMG_2547.JPG",
+  "IMG_2548.JPG","IMG_2549.JPG","IMG_2550.JPG","IMG_2551.JPG"
 ];
 
 const DEFAULT_BRANDS = ["MITSUBISHI","TOYOTA","HONDA","ISUZU","SUZUKI","NISSAN","CHEVROLET","FORD"];
@@ -25,7 +26,8 @@ const DEFAULT_BRANDS = ["MITSUBISHI","TOYOTA","HONDA","ISUZU","SUZUKI","NISSAN",
 const LS = {
   overrides: "stockapp_overrides_v1",
   history: "stockapp_history_v1",
-  theme: "stockapp_theme_v1"
+  theme: "stockapp_theme_v1",
+  seedVersion: "stockapp_seed_version_v1"
 };
 const SS_ADMIN = "stockapp_admin_unlocked";
 
@@ -127,19 +129,28 @@ async function init() {
   if (localOverrides) OVERRIDES = JSON.parse(localOverrides);
   if (localHistory) HISTORY = JSON.parse(localHistory);
 
-  // Merge in the published overrides.json (if any) for cars this browser has no
-  // local data for yet. Never overwrites an id already present locally, so the
-  // admin's own edits always win, but new visitors still see published photos
-  // even if overrides.json only appears after their first visit.
+  // Merge in the published overrides.json (if any). Ids this browser has no
+  // local data for are copied as-is. When a newer overrides.json is published
+  // (different exportedAt), its photos and non-empty price adjustments replace
+  // the local ones — otherwise anyone who opened the site before a stock update
+  // would keep seeing the old photos forever. Between publishes, local admin
+  // edits still win.
   try {
-    const res = await fetch("overrides.json");
+    const res = await fetch("overrides.json", { cache: "no-cache" });
     if (res.ok) {
       const seed = await res.json();
+      const isNewSeed = seed.exportedAt && localStorage.getItem(LS.seedVersion) !== seed.exportedAt;
       if (seed.overrides) {
         for (const [id, ov] of Object.entries(seed.overrides)) {
-          if (!OVERRIDES[id]) OVERRIDES[id] = ov;
+          if (!OVERRIDES[id]) {
+            OVERRIDES[id] = ov;
+          } else if (isNewSeed) {
+            OVERRIDES[id].images = ov.images;
+            if (ov.priceAdjust) OVERRIDES[id].priceAdjust = ov.priceAdjust;
+          }
         }
       }
+      if (isNewSeed) localStorage.setItem(LS.seedVersion, seed.exportedAt);
       if (!localHistory && seed.history && seed.history.length) HISTORY = seed.history;
       saveOverrides();
       saveHistory();
